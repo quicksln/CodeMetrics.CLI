@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>CodeMetrics</RootNamespace>
+    <AssemblyName>codemetrics</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Lets you run "dotnet tool install -g" against the produced package. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>codemetrics</ToolCommandName>
+    <PackageId>CodeMetrics.Cli</PackageId>
+    <Version>1.1.0</Version>
+    <PackageReleaseNotes>Cyclomatic complexity corrections: and/or pattern combinators and catch filters now count as decision points, and a discard case label no longer does. Top-level statement programs are now reported as a single member. Scores may rise on pattern-heavy code, so review any --max-cyclomatic gate. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/quicksln/CodeMetrics.CLI</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/quicksln/CodeMetrics.CLI</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>code-metrics complexity csharp analyzers cli dotnet-tool</PackageTags>
+    <Description>CodeMetrics.Cli measures cyclomatic and cognitive complexity for C# source files with a fast syntax-only Roslyn workflow.</Description>
+    <Authors>quicksln</Authors>
+    <Copyright>Copyright © quicksln</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The README lives at the repository root, one level above this project. -->
+    <None Include="../README.md" Pack="true" PackagePath="\" />
+    <None Include="LICENSE.md" Pack="true" PackagePath="\" />
+
+    <!-- Test data for the walkers. Parsed at runtime, never compiled. -->
+    <Compile Remove="samples/**/*.cs" />
+    <None Include="samples/**/*.cs" />
+
+    <!-- The separate xUnit project owns all test sources. -->
+    <Compile Remove="tests/**/*.cs" />
+    <None Include="tests/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Syntax-only Roslyn. No Workspaces, no MSBuildLocator, no restore of the
+      target project required. Pin to 4.x if you need to run on an older SDK.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
+  </ItemGroup>
+
+</Project>
