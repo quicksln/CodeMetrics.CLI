@@ -5,7 +5,7 @@ CodeMetrics.Cli is a .NET global tool for measuring code quality and complexity 
 With a time will give you quick feedback on your project code complexity. It is designed for developers, code reviews, CI gates, and agent-driven workflows that need quick, deterministic complexity metrics from source text alone.
 Allows AI Agents to verify code they produce, ensuring it meets complexity and maintainability standards keeping code readable and maintainable.
 
-![CodeMetrics.Cli HTML report: a complexity dashboard with summary tiles, cognitive and cyclomatic complexity charts, a maintainability chart, a risk distribution doughnut and a sortable member table](https://raw.githubusercontent.com/quicksln/codemetrics.net/main/doc/CodeMetrics.CLI.jpeg)
+![CodeMetrics.Cli HTML report: a complexity dashboard with summary tiles, cognitive and cyclomatic complexity charts, a maintainability chart, a risk distribution doughnut and a sortable member table](https://raw.githubusercontent.com/quicksln/CodeMetrics.CLI/main/doc/CodeMetrics.CLI.jpeg)
 
 *The `--format html` report: summary tiles, complexity and maintainability charts, risk distribution, and a sortable member table.*
 
@@ -129,6 +129,12 @@ tool is wrong; they apply different rules. Equivalent spellings score alike:
 ```bash
 codemetrics --help
 ```
+
+## Links
+
+- Project home: <https://github.com/quicksln/CodeMetrics.CLI>
+- Issues: <https://github.com/quicksln/CodeMetrics.CLI/issues>
+- License: [MIT](https://github.com/quicksln/CodeMetrics.CLI/blob/main/LICENSE)
 
 ## Example: threshold gate
 

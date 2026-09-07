@@ -15,7 +15,7 @@
     <ToolCommandName>codemetrics</ToolCommandName>
     <PackageId>CodeMetrics.Cli</PackageId>
     <Version>1.1.0</Version>
-    <PackageReleaseNotes>Cyclomatic complexity corrections: and/or pattern combinators and catch filters now count as decision points, and a discard case label no longer does. Top-level statement programs are now reported as a single member. Scores may rise on pattern-heavy code, so review any --max-cyclomatic gate. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>Cyclomatic complexity corrections: and/or pattern combinators and catch filters now count as decision points, and a discard case label no longer does. Top-level statement programs are now reported as a single member. Scores may rise on pattern-heavy code, so review any --max-cyclomatic gate.</PackageReleaseNotes>
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/quicksln/CodeMetrics.CLI</PackageProjectUrl>
@@ -31,7 +31,7 @@
   <ItemGroup>
     <!-- The README lives at the repository root, one level above this project. -->
     <None Include="../README.md" Pack="true" PackagePath="\" />
-    <None Include="LICENSE.md" Pack="true" PackagePath="\" />
+    <None Include="../LICENSE" Pack="true" PackagePath="\" />
 
     <!-- Test data for the walkers. Parsed at runtime, never compiled. -->
     <Compile Remove="samples/**/*.cs" />
