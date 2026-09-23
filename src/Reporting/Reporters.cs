@@ -557,6 +557,8 @@ public static class Reporters
 
                 .table-wrap {
                   overflow: auto;
+                  /* The virtual window manages row positions itself; stop the browser nudging scrollTop. */
+                  overflow-anchor: none;
                   max-height: 70vh;
                   padding: 0 18px 18px;
                 }
@@ -628,6 +630,8 @@ public static class Reporters
                   border-bottom: 1px solid var(--outline);
                   vertical-align: top;
                   font-size: 0.88rem;
+                  /* A unitless line-height keeps row height independent of which font has loaded. */
+                  line-height: 1.4;
                   overflow: hidden;
                 }
 
@@ -635,7 +639,22 @@ public static class Reporters
 
                 tbody tr:hover { background: var(--surface-2); }
 
-                .member-name { font-weight: 500; word-break: break-word; }
+                /* Spacer rows stand in for the rows scrolled out of view. */
+                tbody tr.spacer:hover { background: none; }
+                tbody tr.spacer td { padding: 0; border: 0; }
+
+                /* Every row is single-line per field so all rows share one height,
+                   which the virtualised table relies on. Full text is in the title tooltip. */
+                .member-name,
+                .member-type,
+                .file-name-text,
+                .file-path {
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+
+                .member-name { font-weight: 500; }
 
                 .member-type {
                   display: block;
@@ -645,12 +664,17 @@ public static class Reporters
                 }
 
                 .file-name {
-                  display: inline-flex;
+                  display: flex;
                   align-items: center;
                   gap: 6px;
+                  max-width: 100%;
                   font-size: 0.85rem;
                   font-weight: 500;
                 }
+
+                .file-name-text { min-width: 0; }
+
+                .copy-btn { flex: none; }
 
                 .file-path {
                   display: block;
@@ -658,7 +682,6 @@ public static class Reporters
                   font-size: 0.68rem;
                   margin-top: 2px;
                   font-family: "Roboto Mono", monospace;
-                  word-break: break-all;
                   max-width: 100%;
                 }
 
@@ -885,13 +908,14 @@ public static class Reporters
                         <option value="nesting">Sort: nesting</option>
                         <option value="loc">Sort: LOC</option>
                         <option value="file">Sort: file</option>
+                        <option value="risk">Sort: risk</option>
                       </select>
                       <select id="limitSelect" aria-label="Display row count">
                         <option value="100">100 rows</option>
                         <option value="500">500 rows</option>
                         <option value="1000">1,000 rows</option>
-                        <option value="3000" selected>3,000 rows</option>
-                        <option value="3001">All</option>
+                        <option value="3000">3,000 rows</option>
+                        <option value="3001" selected>All</option>
                       </select>
                     </div>
                   </div>
@@ -906,7 +930,7 @@ public static class Reporters
                           <th class="num" data-sort="loc"><span class="th-inner">LOC<span><span class="material-symbols-rounded">unfold_more</span></span><div class="resizer" data-col="4"></div></th>
                           <th class="num" data-sort="nesting"><span class="th-inner">Nesting<span><span class="material-symbols-rounded">unfold_more</span></span><div class="resizer" data-col="5"></div></th>
                           <th class="num" data-sort="maintainability"><span class="th-inner">MI<span><span class="material-symbols-rounded">unfold_more</span></span><div class="resizer" data-col="6"></div></th>
-                          <th>Risk<div class="resizer" data-col="7"></div></th>
+                          <th data-sort="risk"><span class="th-inner">Risk<span><span class="material-symbols-rounded">unfold_more</span></span><div class="resizer" data-col="7"></div></th>
                         </tr>
                       </thead>
                       <tbody id="membersTable"></tbody>
@@ -954,8 +978,13 @@ public static class Reporters
                 applyThemeMeta();
 
                 /* ---------- Helpers ---------- */
-                const formatNumber = (value) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
-                const formatInteger = (value) => new Intl.NumberFormat('en-US').format(value);
+                // Intl objects are expensive to construct; build each one once, not per row.
+                const numberFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+                const integerFormatter = new Intl.NumberFormat('en-US');
+                // Default collator matches String.prototype.localeCompare() with no arguments.
+                const textCollator = new Intl.Collator();
+                const formatNumber = (value) => numberFormatter.format(value);
+                const formatInteger = (value) => integerFormatter.format(value);
                 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
                 const asNumber = (value, fallback = 0) => {
@@ -979,11 +1008,19 @@ public static class Reporters
 
                 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+                // Ordered by rank so the table can sort on it; shared so sorting doesn't allocate.
+                const RISK_BANDS = [
+                  { rank: 0, label: 'Light', className: 'light', color: () => cssVar('--risk-light-fg') },
+                  { rank: 1, label: 'Moderate', className: 'moderate', color: () => cssVar('--risk-moderate-fg') },
+                  { rank: 2, label: 'High', className: 'high', color: () => cssVar('--risk-high-fg') },
+                  { rank: 3, label: 'Severe', className: 'severe', color: () => cssVar('--risk-severe-fg') }
+                ];
+
                 const getRiskBand = (value) => {
-                  if (value > 20) return { label: 'Severe', className: 'severe', color: () => cssVar('--risk-severe-fg') };
-                  if (value > 10) return { label: 'High', className: 'high', color: () => cssVar('--risk-high-fg') };
-                  if (value > 5) return { label: 'Moderate', className: 'moderate', color: () => cssVar('--risk-moderate-fg') };
-                  return { label: 'Light', className: 'light', color: () => cssVar('--risk-light-fg') };
+                  if (value > 20) return RISK_BANDS[3];
+                  if (value > 10) return RISK_BANDS[2];
+                  if (value > 5) return RISK_BANDS[1];
+                  return RISK_BANDS[0];
                 };
 
                 /* ---------- Summary cards ---------- */
@@ -1209,7 +1246,7 @@ public static class Reporters
 
                 /* ---------- Table ---------- */
                 const ALL_ROWS = 3001;
-                const defaultDirection = { cognitive: 'desc', cyclomatic: 'desc', maintainability: 'asc', loc: 'desc', nesting: 'desc', file: 'asc' };
+                const defaultDirection = { cognitive: 'desc', cyclomatic: 'desc', maintainability: 'asc', loc: 'desc', nesting: 'desc', file: 'asc', risk: 'desc' };
                 const sortState = { key: 'cognitive', dir: 'desc' };
 
                 const metricOf = (member, key) => {
@@ -1219,28 +1256,189 @@ public static class Reporters
                     case 'loc': return asNumber(member.linesOfCode);
                     case 'nesting': return asNumber(member.maxNestingDepth);
                     case 'file': return 0;
+                    case 'risk': return getRiskBand(asNumber(member.cognitiveComplexity)).rank;
                     default: return asNumber(member.cognitiveComplexity);
                   }
                 };
 
+                const rowHtml = (member) => {
+                  const risk = getRiskBand(asNumber(member.cognitiveComplexity));
+                  const fileName = escapeHtml(fileNameOf(member.filePath));
+                  const memberName = escapeHtml(member.memberName);
+                  const typeName = escapeHtml(member.typeName);
+                  const location = `${escapeHtml(member.filePath)} · line ${asNumber(member.lineNumber)}`;
+                  return `
+                    <tr>
+                      <td>
+                        <div class="member-name" title="${memberName}">${memberName}</div>
+                        <span class="member-type" title="${typeName}">${typeName}</span>
+                      </td>
+                      <td>
+                        <span class="file-name">
+                          <span class="file-name-text" title="${fileName}">${fileName}</span>
+                          <button class="copy-btn" data-copy="${fileName}" aria-label="Copy file name ${fileName}" title="Copy file name">
+                            <span class="material-symbols-rounded">content_copy</span>
+                          </button>
+                        </span>
+                        <span class="file-path" title="${location}">${location}</span>
+                      </td>
+                      <td class="num">${asNumber(member.cognitiveComplexity)}</td>
+                      <td class="num">${asNumber(member.cyclomaticComplexity)}</td>
+                      <td class="num">${asNumber(member.linesOfCode)}</td>
+                      <td class="num">${asNumber(member.maxNestingDepth)}</td>
+                      <td class="num">${formatNumber(asNumber(member.maintainabilityIndex))}</td>
+                      <td><span class="tag ${risk.className}"><span class="dot"></span>${risk.label}</span></td>
+                    </tr>
+                  `;
+                };
+
+                // Rows are built lazily, the first time a member becomes visible, and then reused.
+                const rowCache = new Map();
+                const rowTemplate = document.createElement('template');
+                const rowFor = (member) => {
+                  let row = rowCache.get(member);
+                  if (!row) {
+                    rowTemplate.innerHTML = rowHtml(member).trim();
+                    row = rowTemplate.content.firstElementChild;
+                    rowCache.set(member, row);
+                  }
+                  return row;
+                };
+
+                // Built once per member rather than on every keystroke and sort.
+                const searchTextCache = new Map();
+                const searchTextOf = (member) => {
+                  let text = searchTextCache.get(member);
+                  if (text === undefined) {
+                    text = [member.memberName, member.typeName, member.filePath, member.fullName].join(' ').toLowerCase();
+                    searchTextCache.set(member, text);
+                  }
+                  return text;
+                };
+
+                /* ---------- Virtual scrolling ---------- */
+                // Laying out thousands of rows costs ~0.3 ms each, so only the rows in
+                // view (plus a buffer) are in the DOM; spacer rows fill the height of the rest.
+                const OVERSCAN_ROWS = 12;
+                const tableWrap = document.querySelector('.table-wrap');
+                const tableBody = document.getElementById('membersTable');
+                const virtual = { rows: [], rowHeight: 60, first: -1, last: -1 };
+
+                const spacerRow = () => {
+                  const row = document.createElement('tr');
+                  row.className = 'spacer';
+                  row.setAttribute('aria-hidden', 'true');
+                  const cell = document.createElement('td');
+                  cell.colSpan = 8;
+                  row.appendChild(cell);
+                  return row;
+                };
+
+                const topSpacer = spacerRow();
+                const bottomSpacer = spacerRow();
+
+                const rowRange = (from, to) => {
+                  const fragment = document.createDocumentFragment();
+                  for (let index = from; index < to; index++) fragment.appendChild(rowFor(virtual.rows[index]));
+                  return fragment;
+                };
+
+                const removeRange = (from, to) => {
+                  for (let index = from; index < to; index++) rowFor(virtual.rows[index]).remove();
+                };
+
+                // Scrolling keeps the rows that stay in view and only trims or extends the edges,
+                // so focus and text selection inside visible rows survive.
+                const shiftWindow = (first, last) => {
+                  const { first: oldFirst, last: oldLast } = virtual;
+                  removeRange(oldFirst, Math.min(oldLast, first));
+                  removeRange(Math.max(oldFirst, last), oldLast);
+                  topSpacer.after(rowRange(first, Math.min(oldFirst, last)));
+                  bottomSpacer.before(rowRange(Math.max(oldLast, first), last));
+                };
+
+                // New row order (sort/filter): rebuild, then hand focus back if its row is still shown.
+                const rebuildWindow = (first, last) => {
+                  const focused = tableBody.contains(document.activeElement) ? document.activeElement : null;
+                  tableBody.replaceChildren(topSpacer, rowRange(first, last), bottomSpacer);
+                  if (focused && tableBody.contains(focused)) focused.focus({ preventScroll: true });
+                };
+
+                // All rows share one height (single-line fields); measure it from the rendered window.
+                const measureRowHeight = () => {
+                  const rendered = tableBody.querySelectorAll('tr:not(.spacer)');
+                  if (rendered.length < 2) return false;
+                  const top = rendered[0].getBoundingClientRect().top;
+                  const bottom = rendered[rendered.length - 1].getBoundingClientRect().bottom;
+                  const measured = (bottom - top) / rendered.length;
+                  if (!(measured > 0) || Math.abs(measured - virtual.rowHeight) < 0.01) return false;
+                  virtual.rowHeight = measured;
+                  return true;
+                };
+
+                const renderWindow = (force = false) => {
+                  const { rows, rowHeight } = virtual;
+                  const bodyScroll = Math.max(0, tableWrap.scrollTop - tableBody.parentElement.tHead.offsetHeight);
+                  const windowSize = Math.ceil(tableWrap.clientHeight / rowHeight) + OVERSCAN_ROWS * 2;
+                  // Clamp: a filter can shrink the list while the table is scrolled far down.
+                  const first = clamp(Math.floor(bodyScroll / rowHeight) - OVERSCAN_ROWS, 0, Math.max(0, rows.length - windowSize));
+                  const last = Math.min(rows.length, first + windowSize);
+                  if (!force && first === virtual.first && last === virtual.last) return;
+
+                  if (force || virtual.first < 0) {
+                    rebuildWindow(first, last);
+                  } else {
+                    shiftWindow(first, last);
+                  }
+
+                  virtual.first = first;
+                  virtual.last = last;
+                  topSpacer.firstChild.style.height = `${first * rowHeight}px`;
+                  bottomSpacer.firstChild.style.height = `${(rows.length - last) * rowHeight}px`;
+                };
+
+                const showRows = (rows) => {
+                  virtual.rows = rows;
+                  if (rows.length === 0) {
+                    virtual.first = virtual.last = -1;
+                    tableBody.innerHTML = '<tr><td colspan="8" class="empty-state">No members match the current filter.</td></tr>';
+                    return;
+                  }
+                  renderWindow(true);
+                  if (measureRowHeight()) renderWindow(true);
+                };
+
+                let scrollFrame = 0;
+                const scheduleWindow = () => {
+                  if (scrollFrame || virtual.rows.length === 0) return;
+                  scrollFrame = window.requestAnimationFrame(() => {
+                    scrollFrame = 0;
+                    renderWindow();
+                  });
+                };
+
+                tableWrap.addEventListener('scroll', scheduleWindow, { passive: true });
+                window.addEventListener('resize', scheduleWindow);
+
                 const renderTable = () => {
                   const searchInput = document.getElementById('searchInput');
                   const limitSelect = document.getElementById('limitSelect');
-                  const tableBody = document.getElementById('membersTable');
 
                   const query = searchInput.value.trim().toLowerCase();
                   const limit = Number(limitSelect.value || ALL_ROWS);
 
-                  let rows = metrics.filter((member) => {
-                    const haystack = [member.memberName, member.typeName, member.filePath, member.fullName].join(' ').toLowerCase();
-                    return haystack.includes(query);
-                  });
+                  let rows = query ? metrics.filter((member) => searchTextOf(member).includes(query)) : [...metrics];
 
                   rows.sort((a, b) => {
                     const multiplier = sortState.dir === 'asc' ? 1 : -1;
 
                     if (sortState.key === 'file') {
-                      return multiplier * ((a.filePath || '').localeCompare(b.filePath || '') || (a.memberName || '').localeCompare(b.memberName || ''));
+                      return multiplier * (textCollator.compare(a.filePath || '', b.filePath || '') || textCollator.compare(a.memberName || '', b.memberName || ''));
+                    }
+
+                    if (sortState.key === 'risk') {
+                      // Within a band, order by the cognitive score the band is derived from.
+                      return multiplier * (metricOf(a, 'risk') - metricOf(b, 'risk') || metricOf(a, 'cognitive') - metricOf(b, 'cognitive'));
                     }
 
                     return multiplier * (metricOf(a, sortState.key) - metricOf(b, sortState.key));
@@ -1262,34 +1460,7 @@ public static class Reporters
                   document.getElementById('sortSelect').value = sortState.key;
 
                   const visibleRows = limit === ALL_ROWS ? rows : rows.slice(0, limit);
-                  tableBody.innerHTML = visibleRows.length === 0
-                    ? '<tr><td colspan="8" class="empty-state">No members match the current filter.</td></tr>'
-                    : visibleRows.map((member) => {
-                        const risk = getRiskBand(asNumber(member.cognitiveComplexity));
-                        return `
-                          <tr>
-                            <td>
-                              <div class="member-name">${escapeHtml(member.memberName)}</div>
-                              <span class="member-type">${escapeHtml(member.typeName)}</span>
-                            </td>
-                            <td>
-                              <span class="file-name">
-                                ${escapeHtml(fileNameOf(member.filePath))}
-                                <button class="copy-btn" data-copy="${escapeHtml(fileNameOf(member.filePath))}" aria-label="Copy file name ${escapeHtml(fileNameOf(member.filePath))}" title="Copy file name">
-                                  <span class="material-symbols-rounded">content_copy</span>
-                                </button>
-                              </span>
-                              <span class="file-path">${escapeHtml(member.filePath)} · line ${asNumber(member.lineNumber)}</span>
-                            </td>
-                            <td class="num">${asNumber(member.cognitiveComplexity)}</td>
-                            <td class="num">${asNumber(member.cyclomaticComplexity)}</td>
-                            <td class="num">${asNumber(member.linesOfCode)}</td>
-                            <td class="num">${asNumber(member.maxNestingDepth)}</td>
-                            <td class="num">${formatNumber(asNumber(member.maintainabilityIndex))}</td>
-                            <td><span class="tag ${risk.className}"><span class="dot"></span>${risk.label}</span></td>
-                          </tr>
-                        `;
-                      }).join('');
+                  showRows(visibleRows);
 
                   const totalLabel = `${formatInteger(visibleRows.length)} of ${formatInteger(rows.length)} members${query ? ' (filtered)' : ''}`;
                   document.getElementById('rowCount').textContent = totalLabel;
