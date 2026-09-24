@@ -885,11 +885,11 @@ public static class Reporters
                 <section class="panel-grid">
                   <article class="panel">
                     <h2><span class="material-symbols-rounded">build</span>Maintainability (lowest first)</h2>
-                    <div class="chart-wrap"><canvas id="maintainabilityChart" role="img" aria-label="Horizontal bar chart of maintainability index, lowest values first"></canvas></div>
+                    <div class="chart-wrap"><canvas id="maintainabilityChart" role="img" aria-label="Bar chart of maintainability index, lowest values first"></canvas></div>
                   </article>
                   <article class="panel">
                     <h2><span class="material-symbols-rounded">pie_chart</span>Risk distribution</h2>
-                    <div class="chart-wrap"><canvas id="riskChart" role="img" aria-label="Doughnut chart of members per risk band"></canvas></div>
+                    <div class="chart-wrap"><canvas id="riskChart" role="img" aria-label="Doughnut chart of members per risk band, with the member count labelled on each segment"></canvas></div>
                   </article>
                 </section>
 
@@ -1106,6 +1106,8 @@ public static class Reporters
                   };
                 };
 
+                const CHART_MEMBER_COUNT = 10;
+
                 const renderCharts = () => {
                   Object.values(charts).forEach((chart) => chart.destroy());
                   if (typeof Chart === 'undefined') return;
@@ -1142,7 +1144,7 @@ public static class Reporters
                     }
                   });
 
-                  const cognitive = top('cognitiveComplexity', 8);
+                  const cognitive = top('cognitiveComplexity', CHART_MEMBER_COUNT);
                   charts.cognitive = new Chart(document.getElementById('cognitiveChart'), {
                     type: 'bar',
                     data: {
@@ -1159,7 +1161,7 @@ public static class Reporters
                     options: withMemberTooltip(baseBarOptions())
                   });
 
-                  const cyclomatic = top('cyclomaticComplexity', 8);
+                  const cyclomatic = top('cyclomaticComplexity', CHART_MEMBER_COUNT);
                   charts.cyclomatic = new Chart(document.getElementById('cyclomaticChart'), {
                     type: 'bar',
                     data: {
@@ -1178,7 +1180,7 @@ public static class Reporters
 
                   const lowestMaintainability = [...metrics]
                     .sort((a, b) => asNumber(a.maintainabilityIndex) - asNumber(b.maintainabilityIndex))
-                    .slice(0, 8)
+                    .slice(0, CHART_MEMBER_COUNT)
                     .map((item) => ({
                       label: truncate(item.memberName, 22),
                       fullName: `${item.typeName}.${item.memberName}`,
@@ -1200,8 +1202,8 @@ public static class Reporters
                       }]
                     },
                     options: (() => {
-                      const options = baseBarOptions('y');
-                      options.scales.x = { min: 0, max: 100, ticks: { color: chartTheme().text }, grid: { color: chartTheme().grid } };
+                      const options = baseBarOptions();
+                      options.scales.y = { min: 0, max: 100, ticks: { color: chartTheme().text }, grid: { color: chartTheme().grid } };
                       return withMemberTooltip(options);
                     })()
                   });
@@ -1211,8 +1213,77 @@ public static class Reporters
                     riskBands[getRiskBand(asNumber(member.cognitiveComplexity)).label] += 1;
                   });
 
+                  // Draws a leader line from each non-empty segment to its member count. Labels sit in a
+                  // column either side of the doughnut and are spaced apart so thin adjacent segments stay readable.
+                  const CALLOUT_GAP = 16;
+                  const calloutAnchors = (chart) => {
+                    const values = chart.data.datasets[0].data;
+                    return chart.getDatasetMeta(0).data.flatMap((arc, index) => {
+                      if (!values[index] || !chart.getDataVisibility(index)) return [];
+                      const { x, y, startAngle, endAngle, outerRadius } = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'outerRadius']);
+                      const angle = (startAngle + endAngle) / 2;
+                      const dx = Math.cos(angle);
+                      const dy = Math.sin(angle);
+                      return [{
+                        value: values[index],
+                        color: arc.options.backgroundColor,
+                        right: dx >= 0,
+                        columnX: x + (dx >= 0 ? 1 : -1) * (outerRadius + 26),
+                        start: { x: x + dx * (outerRadius + 3), y: y + dy * (outerRadius + 3) },
+                        elbow: { x: x + dx * (outerRadius + 12), y: y + dy * (outerRadius + 12) },
+                        labelY: y + dy * (outerRadius + 12)
+                      }];
+                    });
+                  };
+
+                  const spreadLabels = (anchors, top, bottom) => {
+                    anchors.sort((a, b) => a.labelY - b.labelY);
+                    anchors.forEach((anchor, i) => {
+                      const floor = i === 0 ? top : anchors[i - 1].labelY + CALLOUT_GAP;
+                      anchor.labelY = Math.max(anchor.labelY, floor);
+                    });
+                    const overflow = anchors.length ? anchors[anchors.length - 1].labelY - bottom : 0;
+                    if (overflow > 0) anchors.forEach((anchor) => { anchor.labelY = Math.max(top, anchor.labelY - overflow); });
+                  };
+
+                  const drawCallout = (ctx, anchor, textColor) => {
+                    ctx.strokeStyle = anchor.color;
+                    ctx.fillStyle = anchor.color;
+                    ctx.beginPath();
+                    ctx.moveTo(anchor.start.x, anchor.start.y);
+                    ctx.lineTo(anchor.elbow.x, anchor.elbow.y);
+                    ctx.lineTo(anchor.columnX, anchor.labelY);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(anchor.start.x, anchor.start.y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = textColor;
+                    ctx.textAlign = anchor.right ? 'left' : 'right';
+                    ctx.fillText(String(anchor.value), anchor.columnX + (anchor.right ? 4 : -4), anchor.labelY);
+                  };
+
+                  const segmentCallouts = {
+                    id: 'segmentCallouts',
+                    afterDatasetsDraw(chart) {
+                      const { ctx, chartArea } = chart;
+                      const anchors = calloutAnchors(chart);
+                      const top = chartArea.top - 20;
+                      const bottom = chartArea.bottom + 20;
+                      spreadLabels(anchors.filter((anchor) => anchor.right), top, bottom);
+                      spreadLabels(anchors.filter((anchor) => !anchor.right), top, bottom);
+                      ctx.save();
+                      ctx.font = `600 12px ${Chart.defaults.font.family}`;
+                      ctx.textBaseline = 'middle';
+                      ctx.lineWidth = 1;
+                      const textColor = cssVar('--text') || '#fff';
+                      anchors.forEach((anchor) => drawCallout(ctx, anchor, textColor));
+                      ctx.restore();
+                    }
+                  };
+
                   charts.risk = new Chart(document.getElementById('riskChart'), {
                     type: 'doughnut',
+                    plugins: [segmentCallouts],
                     data: {
                       labels: Object.keys(riskBands),
                       datasets: [{
@@ -1230,6 +1301,7 @@ public static class Reporters
                       responsive: true,
                       maintainAspectRatio: false,
                       cutout: '62%',
+                      layout: { padding: { top: 28, bottom: 28, left: 56, right: 56 } },
                       animation: { duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450 },
                       plugins: {
                         legend: {
