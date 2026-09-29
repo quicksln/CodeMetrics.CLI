@@ -14,8 +14,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codemetrics</ToolCommandName>
     <PackageId>CodeMetrics.Cli</PackageId>
-    <Version>1.1.0</Version>
-    <PackageReleaseNotes>Cyclomatic complexity corrections: and/or pattern combinators and catch filters now count as decision points, and a discard case label no longer does. Top-level statement programs are now reported as a single member. Scores may rise on pattern-heavy code, so review any --max-cyclomatic gate.</PackageReleaseNotes>
+    <Version>1.2.0</Version>
+    <PackageReleaseNotes>New `--format markdown` writes an agent-readable GitHub-flavoured report: a summary table with the same headline figures the HTML dashboard shows (members, files, total lines, class/record/enum counts, cognitive and cyclomatic avg/median/p90/max, MI avg and minimum, highest-risk member), risk bands, a member table using the CSV column set, and the gate result. `--top` limits member rows and `--top 0` prints every member; summary and band figures always cover the whole population. Purely additive: table, csv, json and html output are unchanged.</PackageReleaseNotes>
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/quicksln/CodeMetrics.CLI</PackageProjectUrl>

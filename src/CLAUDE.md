@@ -17,7 +17,7 @@ Treat all observable behavior as versioned API:
 - Exit codes: `0` for success, `1` for a configured threshold breach, and `2` for usage/input failures.
 - stdout/stderr routing. Machine-readable stdout must contain report data only; diagnostics and progress belong on stderr.
 - Single-file behavior, including stdout plus sidecar output and `<source>.codemetrics.<extension>` naming.
-- JSON properties and types, CSV headers/order/escaping, table behavior, HTML data, report ordering, and invariant numeric formatting.
+- JSON properties and types, CSV headers/order/escaping, table behavior, HTML data, Markdown section headings/summary labels/column set/`--top` semantics, report ordering, and invariant numeric formatting.
 - Metric definitions, included member kinds, line numbers, source-discovery rules, and generated-file exclusions.
 - Thresholds are exceeded only when a metric is strictly greater than the configured positive limit.
 

@@ -17,6 +17,7 @@ public class DeterministicReportTests
     [InlineData(OutputFormat.Csv)]
     [InlineData(OutputFormat.Json)]
     [InlineData(OutputFormat.Html)]
+    [InlineData(OutputFormat.Markdown)]
     public void RepeatedRendering_ProducesIdenticalOutput(OutputFormat format)
     {
         var report = ReportFixture.Report(
@@ -33,6 +34,7 @@ public class DeterministicReportTests
     // every json number if any formatting call used the ambient culture.
     [InlineData(OutputFormat.Csv, "70.5")]
     [InlineData(OutputFormat.Json, "70.5")]
+    [InlineData(OutputFormat.Markdown, "70.5")]
     public void NumericFormatting_IgnoresTheAmbientCulture(OutputFormat format, string expected)
     {
         var output = InGermanCulture(() =>

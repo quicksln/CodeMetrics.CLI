@@ -33,6 +33,10 @@ public static class Reporters
                 WriteHtml(report, options.Path, writer);
                 break;
 
+            case OutputFormat.Markdown:
+                WriteMarkdown(report, options, writer);
+                break;
+
             default:
                 WriteTable(report.Members, options, report.SourceSummary.FileCount, writer);
                 break;
@@ -66,6 +70,10 @@ public static class Reporters
 
             case OutputFormat.Html:
                 WriteHtml(new AnalysisReport(members, new SourceSummary(fileCount, 0, 0, 0, 0)), options.Path, writer);
+                break;
+
+            case OutputFormat.Markdown:
+                WriteMarkdown(new AnalysisReport(members, new SourceSummary(fileCount, 0, 0, 0, 0)), options, writer);
                 break;
 
             default:
@@ -193,6 +201,230 @@ public static class Reporters
             writer.WriteLine($"Gate cyclomatic <= {options.MaxCyclomatic}: {breaches} member(s) over the limit.");
         }
     }
+
+    /// <summary>
+    /// GitHub-flavoured markdown for AI agents: a summary table carrying the same
+    /// figures the HTML dashboard shows as tiles, a risk-band table, a member
+    /// table using the csv column set, and the gate result. No charts, no
+    /// narrative, no timestamps, so the file stays diffable and committable.
+    /// </summary>
+    private static void WriteMarkdown(AnalysisReport report, Options options, TextWriter writer)
+    {
+        writer.WriteLine("# Code Metrics Report");
+        writer.WriteLine();
+        writer.WriteLine($"Path: `{InlineCode(options.Path)}`");
+        writer.WriteLine();
+
+        WriteMarkdownSummary(report.Members, report.SourceSummary, writer);
+        WriteMarkdownRiskBands(report.Members, writer);
+        WriteMarkdownMembers(report.Members, options, writer);
+        WriteMarkdownGate(report.Members, options, writer);
+    }
+
+    private static void WriteMarkdownSummary(
+        IReadOnlyList<MemberMetrics> members,
+        SourceSummary source,
+        TextWriter writer)
+    {
+        var cognitive = members.Select(m => m.CognitiveComplexity).ToArray();
+        var cyclomatic = members.Select(m => m.CyclomaticComplexity).ToArray();
+
+        writer.WriteLine("## Summary");
+        writer.WriteLine();
+        writer.WriteLine("| Metric | Value |");
+        writer.WriteLine("| --- | ---: |");
+
+        MarkdownRow(writer, "Members analysed", members.Count);
+        MarkdownRow(writer, "C# files", source.FileCount);
+        MarkdownRow(writer, "Total lines", source.LineCount);
+        MarkdownRow(writer, "C# classes", source.ClassCount);
+        MarkdownRow(writer, "C# records", source.RecordCount);
+        MarkdownRow(writer, "C# enums", source.EnumCount);
+        MarkdownRow(writer, "Analysed LOC", members.Sum(m => m.LinesOfCode));
+
+        MarkdownDistribution(writer, "Cognitive", cognitive);
+        MarkdownDistribution(writer, "Cyclomatic", cyclomatic);
+
+        MarkdownRow(writer, "MI avg", Format(MaintainabilityAverage(members), "F1"));
+        MarkdownRow(writer, "MI minimum", Format(MaintainabilityMinimum(members), "F1"));
+        writer.WriteLine();
+
+        WriteMarkdownHighlights(members, writer);
+    }
+
+    private static void MarkdownDistribution(TextWriter writer, string label, int[] values)
+    {
+        MarkdownRow(writer, $"{label} avg", Format(Average(values), "F1"));
+        MarkdownRow(writer, $"{label} median", Percentile(values, 50));
+        MarkdownRow(writer, $"{label} p90", Percentile(values, 90));
+        MarkdownRow(writer, $"{label} max", values.Length == 0 ? 0 : values.Max());
+    }
+
+    private static void WriteMarkdownHighlights(IReadOnlyList<MemberMetrics> members, TextWriter writer)
+    {
+        var highestRisk = members.OrderByDescending(m => m.CognitiveComplexity)
+            .ThenByDescending(m => m.CyclomaticComplexity)
+            .ThenBy(m => m.FilePath, StringComparer.Ordinal)
+            .ThenBy(m => m.LineNumber)
+            .FirstOrDefault();
+
+        if (highestRisk is not null)
+        {
+            writer.WriteLine(MarkdownHighlight("Highest risk member", highestRisk,
+                $"cognitive {highestRisk.CognitiveComplexity}, cyclomatic {highestRisk.CyclomaticComplexity}"));
+        }
+
+        var lowestMaintainability = members.OrderBy(m => m.MaintainabilityIndex)
+            .ThenBy(m => m.FilePath, StringComparer.Ordinal)
+            .ThenBy(m => m.LineNumber)
+            .FirstOrDefault();
+
+        if (lowestMaintainability is not null)
+        {
+            writer.WriteLine(MarkdownHighlight("Lowest maintainability", lowestMaintainability,
+                string.Create(CultureInfo.InvariantCulture, $"MI {lowestMaintainability.MaintainabilityIndex:F1}")));
+        }
+
+        if (highestRisk is null)
+        {
+            writer.WriteLine("No members with a body were found.");
+        }
+
+        writer.WriteLine();
+    }
+
+    private static string MarkdownHighlight(string label, MemberMetrics member, string detail) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{label}: `{InlineCode(member.FullName)}` ({detail}) — `{InlineCode($"{Path.GetFileName(member.FilePath)}:{member.LineNumber}")}`");
+
+    private static void WriteMarkdownRiskBands(IReadOnlyList<MemberMetrics> members, TextWriter writer)
+    {
+        writer.WriteLine("## Risk bands");
+        writer.WriteLine();
+        writer.WriteLine("| Band | Range | Members |");
+        writer.WriteLine("| --- | --- | ---: |");
+
+        MarkdownBand(writer, "Light", "0-5", members, value => value <= 5);
+        MarkdownBand(writer, "Moderate", "6-10", members, value => value is > 5 and <= 10);
+        MarkdownBand(writer, "High", "11-20", members, value => value is > 10 and <= 20);
+        MarkdownBand(writer, "Severe", "21+", members, value => value > 20);
+        writer.WriteLine();
+    }
+
+    private static void MarkdownBand(
+        TextWriter writer,
+        string label,
+        string range,
+        IReadOnlyList<MemberMetrics> members,
+        Func<int, bool> matches) =>
+        MarkdownRow(writer, label, range, members.Count(m => matches(m.CognitiveComplexity)));
+
+    private static void WriteMarkdownMembers(
+        IReadOnlyList<MemberMetrics> members,
+        Options options,
+        TextWriter writer)
+    {
+        // Same ranking keys as the table report; markdown reads --top 0 as
+        // "every member", because an agent asking for a report rarely wants a
+        // silently truncated one.
+        var ranked = members
+            .OrderByDescending(m => m.CognitiveComplexity)
+            .ThenByDescending(m => m.CyclomaticComplexity)
+            .ThenBy(m => m.FilePath, StringComparer.Ordinal)
+            .ThenBy(m => m.LineNumber);
+
+        var rows = options.Top > 0 ? ranked.Take(options.Top).ToList() : ranked.ToList();
+
+        writer.WriteLine("## Members");
+        writer.WriteLine();
+        writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"Ranked by cognitive complexity, then cyclomatic complexity. Showing {rows.Count} of {members.Count} member(s)."));
+        writer.WriteLine();
+
+        if (rows.Count == 0)
+        {
+            writer.WriteLine("No members with a body were found.");
+            writer.WriteLine();
+            return;
+        }
+
+        writer.WriteLine("| File | Line | Type | Member | Cognitive | Cyclomatic | LinesOfCode | MaxNesting | Parameters | MaintainabilityIndex |");
+        writer.WriteLine("| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |");
+
+        foreach (var member in rows)
+        {
+            writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"| {EscapeMarkdownCell(member.FilePath)} | {member.LineNumber} "
+                + $"| {EscapeMarkdownCell(member.TypeName)} | {EscapeMarkdownCell(member.MemberName)} "
+                + $"| {member.CognitiveComplexity} | {member.CyclomaticComplexity} | {member.LinesOfCode} "
+                + $"| {member.MaxNestingDepth} | {member.ParameterCount} | {member.MaintainabilityIndex:F1} |"));
+        }
+
+        writer.WriteLine();
+    }
+
+    private static void WriteMarkdownGate(IReadOnlyList<MemberMetrics> members, Options options, TextWriter writer)
+    {
+        if (!options.HasGate)
+        {
+            return;
+        }
+
+        writer.WriteLine("## Gate");
+        writer.WriteLine();
+
+        if (options.MaxCognitive > 0)
+        {
+            var breaches = members.Count(m => m.CognitiveComplexity > options.MaxCognitive);
+            writer.WriteLine($"Gate cognitive <= {options.MaxCognitive}: {breaches} member(s) over the limit.");
+        }
+
+        if (options.MaxCyclomatic > 0)
+        {
+            var breaches = members.Count(m => m.CyclomaticComplexity > options.MaxCyclomatic);
+            writer.WriteLine($"Gate cyclomatic <= {options.MaxCyclomatic}: {breaches} member(s) over the limit.");
+        }
+
+        writer.WriteLine();
+    }
+
+    private static void MarkdownRow(TextWriter writer, string label, int value) =>
+        writer.WriteLine($"| {label} | {value} |");
+
+    private static void MarkdownRow(TextWriter writer, string label, string value) =>
+        writer.WriteLine($"| {label} | {value} |");
+
+    private static void MarkdownRow(TextWriter writer, string label, string range, int value) =>
+        writer.WriteLine($"| {label} | {range} | {value} |");
+
+    private static double MaintainabilityAverage(IReadOnlyCollection<MemberMetrics> members) =>
+        members.Count == 0 ? 0d : members.Average(m => m.MaintainabilityIndex);
+
+    private static double MaintainabilityMinimum(IReadOnlyCollection<MemberMetrics> members) =>
+        members.Count == 0 ? 0d : members.Min(m => m.MaintainabilityIndex);
+
+    private static string Format(double value, string format) =>
+        value.ToString(format, CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Keeps a cell on one line and inside its column. Backslashes in Windows
+    /// paths are left alone so locations round-trip.
+    /// </summary>
+    private static string EscapeMarkdownCell(string value) =>
+        value.Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r\n", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A value placed inside an inline code span. A pipe is literal markup
+    /// there rather than a column separator, so it must not be escaped; only
+    /// line endings, which would break the line, are flattened.
+    /// </summary>
+    private static string InlineCode(string value) =>
+        value.Replace("\r\n", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal);
 
     private static void WriteHtml(AnalysisReport report, string rootPath, TextWriter writer)
     {
