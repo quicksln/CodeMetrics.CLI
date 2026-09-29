@@ -61,9 +61,11 @@ public class OptionsParseTests
     [InlineData("csv", OutputFormat.Csv)]
     [InlineData("json", OutputFormat.Json)]
     [InlineData("html", OutputFormat.Html)]
+    [InlineData("markdown", OutputFormat.Markdown)]
     // Format names are case-insensitive.
     [InlineData("JSON", OutputFormat.Json)]
     [InlineData("Html", OutputFormat.Html)]
+    [InlineData("Markdown", OutputFormat.Markdown)]
     public void Format_ParsesEveryDocumentedName(string value, OutputFormat expected)
     {
         Assert.Equal(expected, Parse("--format", value, "./src").Format);
@@ -125,7 +127,7 @@ public class OptionsParseTests
     [InlineData(new[] { "--single" }, "--single needs a file path.")]
     [InlineData(new[] { "--output" }, "--output needs a file path.")]
     // Values that are the wrong shape.
-    [InlineData(new[] { "-f", "xml", "./src" }, "Unknown format 'xml'. Use table, csv, json or html.")]
+    [InlineData(new[] { "-f", "xml", "./src" }, "Unknown format 'xml'. Use table, csv, json, html or markdown.")]
     [InlineData(new[] { "--top", "abc", "./src" }, "--top needs a whole number.")]
     [InlineData(new[] { "--max-cognitive", "ten", "./src" }, "--max-cognitive needs a whole number.")]
     // Shape of the command line itself.
@@ -168,6 +170,7 @@ public class OptionsParseTests
     [InlineData("json", ".codemetrics.json")]
     [InlineData("csv", ".codemetrics.csv")]
     [InlineData("html", ".codemetrics.html")]
+    [InlineData("markdown", ".codemetrics.md")]
     [InlineData("table", ".codemetrics.txt")]
     public void SingleFile_NamesTheSidecarAfterTheSourceAndFormat(string format, string expectedSuffix)
     {
