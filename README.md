@@ -21,6 +21,7 @@ dotnet tool install --global CodeMetrics.Cli
 codemetrics ./src
 codemetrics ./src --format json --output metrics.json
 codemetrics ./src --format html --output report.html
+codemetrics ./src --format markdown --output METRICS.md
 codemetrics -s src/Checkout.cs
 codemetrics ./src --max-cognitive 15 --max-cyclomatic 10
 ```
@@ -116,6 +117,29 @@ tool is wrong; they apply different rules. Equivalent spellings score alike:
 - `csv`
 - `json`
 - `html`
+- `markdown` (agent-readable report)
+
+### Reading metrics with an AI agent
+
+`--format markdown` writes a GitHub-flavoured Markdown report built for an LLM
+to read without a browser: a `## Summary` table (members, files, total lines,
+class/record/enum counts, cognitive and cyclomatic avg/median/p90/max, MI avg
+and minimum, highest-risk and lowest-maintainability member), a `## Risk bands`
+table, a `## Members` table using the same columns as `csv`, and a `## Gate`
+section when a threshold is configured.
+
+```bash
+codemetrics ./src --format markdown --output METRICS.md
+codemetrics ./src --format markdown --top 0
+codemetrics -s src/Checkout.cs -f markdown
+```
+
+`--top` limits the rows in the `## Members` table; in this format `--top 0`
+means every member. The `## Summary` and `## Risk bands` figures always
+describe the whole population, never just the printed rows. The report contains
+no timestamp, so it can be committed and diffed. Committing it as `METRICS.md`
+at the repository root is a useful convention, but the tool never writes that
+name on its own.
 
 ## Notes
 

@@ -5,7 +5,9 @@ public enum OutputFormat
     Table,
     Csv,
     Json,
-    Html
+    Html,
+    /// <summary>GitHub-flavoured markdown report aimed at AI agents.</summary>
+    Markdown
 }
 
 /// <summary>
@@ -21,7 +23,10 @@ public sealed record Options
 
     public OutputFormat Format { get; init; } = OutputFormat.Table;
 
-    /// <summary>How many of the worst members to print. Only affects the table.</summary>
+    /// <summary>
+    /// How many of the worst members to print. Affects the table and markdown
+    /// reports. Markdown treats 0 as "every member"; the table prints nothing.
+    /// </summary>
     public int Top { get; init; } = 20;
 
     /// <summary>Fail the run above this cyclomatic score. 0 disables the gate.</summary>
@@ -67,7 +72,7 @@ public sealed record Options
 
                     if (!Enum.TryParse(formatValue, ignoreCase: true, out format))
                     {
-                        error = $"Unknown format '{formatValue}'. Use table, csv, json or html.";
+                        error = $"Unknown format '{formatValue}'. Use table, csv, json, html or markdown.";
                         return null;
                     }
 
@@ -198,8 +203,12 @@ public sealed record Options
             stdout and writes a copy next to the file. Default format: json.
 
             Options:
-              -f, --format <table|csv|json|html>  Output format. Default: table.
-              -t, --top <n>                      Rows in the table. Default: 20.
+              -f, --format <table|csv|json|html|markdown>
+                                                 Output format. Default: table.
+              -t, --top <n>                      Rows in the table or markdown
+                                                 report. Markdown prints every
+                                                 member when n is 0.
+                                                 Default: 20.
               -o, --output <file>                Write to a file instead of stdout.
                                                  With -s, relocates the file copy.
                   --max-cyclomatic <n>           Exit 1 if any member exceeds this.
@@ -218,9 +227,11 @@ public sealed record Options
               codemetrics MyApp.sln --top 40
               codemetrics MyApp.sln --format json --output metrics.json
               codemetrics ./src --format html --output metrics-report.html
+              codemetrics ./src --format markdown --output METRICS.md
               codemetrics ./src --max-cognitive 15 --max-cyclomatic 10
               codemetrics -s src/Checkout.cs
               codemetrics -s src/Checkout.cs -f csv
+              codemetrics -s src/Checkout.cs -f markdown -t 0
             """);
     }
 
@@ -254,6 +265,7 @@ public sealed record Options
         {
             OutputFormat.Csv => ".csv",
             OutputFormat.Html => ".html",
+            OutputFormat.Markdown => ".md",
             OutputFormat.Table => ".txt",
             _ => ".json"
         };
