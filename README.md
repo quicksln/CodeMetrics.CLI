@@ -1,6 +1,6 @@
 # CodeMetrics.Cli
 
-CodeMetrics.Cli is a .NET global tool for measuring code quality and complexity in C# source files without restoring or compiling the target project.
+CodeMetrics.Cli is a .NET global tool for measuring code quality and complexity in C# source files without restoring or compiling the target project. It supports **.NET 11** and **.NET 10**.
 
 With a time will give you quick feedback on your project code complexity. It is designed for developers, code reviews, CI gates, and agent-driven workflows that need quick, deterministic complexity metrics from source text alone.
 Allows AI Agents to verify code they produce, ensuring it meets complexity and maintainability standards keeping code readable and maintainable.
@@ -10,6 +10,8 @@ Allows AI Agents to verify code they produce, ensuring it meets complexity and m
 *The `--format html` report: summary tiles, complexity and maintainability charts, risk distribution, and a sortable member table.*
 
 ## Install
+
+Requires the .NET 11 (STS) or .NET 10 (LTS) runtime. The package carries a build for both frameworks, and `dotnet tool install` picks the one matching your installed runtime. Analysis stays syntax-only, so the C# code you measure can target any .NET version.
 
 ```bash
 dotnet tool install --global CodeMetrics.Cli
