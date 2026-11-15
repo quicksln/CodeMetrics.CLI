@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -14,8 +14,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codemetrics</ToolCommandName>
     <PackageId>CodeMetrics.Cli</PackageId>
-    <Version>1.2.0</Version>
-    <PackageReleaseNotes>New `--format markdown` writes an agent-readable GitHub-flavoured report: a summary table with the same headline figures the HTML dashboard shows (members, files, total lines, class/record/enum counts, cognitive and cyclomatic avg/median/p90/max, MI avg and minimum, highest-risk member), risk bands, a member table using the CSV column set, and the gate result. `--top` limits member rows and `--top 0` prints every member; summary and band figures always cover the whole population. Purely additive: table, csv, json and html output are unchanged.</PackageReleaseNotes>
+    <Version>1.3.0</Version>
+    <PackageReleaseNotes>Multi-targets .NET 11 (STS) and .NET 10 (LTS): the tool installs and runs on either runtime. Upgrades Microsoft.CodeAnalysis.CSharp to 5.12.0 for C# 15 / .NET 11 syntax support. Purely additive: the command surface, exit codes, and table, csv, json, html and markdown output are unchanged.</PackageReleaseNotes>
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/quicksln/CodeMetrics.CLI</PackageProjectUrl>
@@ -45,9 +45,10 @@
   <ItemGroup>
     <!--
       Syntax-only Roslyn. No Workspaces, no MSBuildLocator, no restore of the
-      target project required. Pin to 4.x if you need to run on an older SDK.
+      target project required. 5.12.0 parses C# 15; its net10.0 assets serve
+      both the net10.0 and net11.0 tool targets.
     -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
   </ItemGroup>
 
 </Project>
