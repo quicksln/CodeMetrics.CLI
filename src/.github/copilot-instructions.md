@@ -89,7 +89,7 @@ each release, and at least annually. Runtime guidance MAY add detail but MUST NO
 
 ## Project Context
 
-- This repository produces `CodeMetrics.Cli`, a .NET 10 global tool invoked as `codemetrics`.
+- This repository produces `CodeMetrics.Cli`, a global tool invoked as `codemetrics`, multi-targeting .NET 11 and .NET 10.
 - The tool performs syntax-only C# analysis with `Microsoft.CodeAnalysis.CSharp`; do not introduce MSBuild project loading, target-project restore, or semantic compilation without an approved architectural and constitutional change.
 - Preserve the current boundaries: `Program.cs` orchestrates execution, `Cli/` owns arguments, `Analysis/` owns source discovery and metrics, `Reporting/` owns output formats, and `samples/` contains noncompiled syntax fixtures.
 - Keep dependencies minimal. Prefer the .NET base class library and existing Roslyn APIs over new packages.
